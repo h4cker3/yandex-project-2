@@ -1,10 +1,11 @@
 # This is main file of project
-# Last commit: added a map with good tiles and player/camera classes and movement
+# Last commit: added a collision with blocks
 # MAIN TODO: create a good map for testing
 import pygame
 import sys
 import os
 import time
+from pprint import pprint
 
 FPS = 50
 
@@ -58,7 +59,7 @@ tile_images = {
     'wall': load_image('box.png'),
     'empty': load_image('grass.png')
 }
-player_image = load_image('player.png')
+player_image = load_image('player.png', -1)
 
 tile_width = tile_height = 50
 
@@ -124,7 +125,7 @@ camera = Camera()
 
 
 def start_screen():
-    intro_text = ["ЗАСТАВКА", "",
+    intro_text = ["AI EVOLUTION", "",
                   "Правила игры",
                   "Если в правилах несколько строк,",
                   "приходится выводить их построчно"]
@@ -134,7 +135,7 @@ def start_screen():
     font = pygame.font.Font(None, 30)
     text_coord = 50
     for line in intro_text:
-        string_rendered = font.render(line, 1, pygame.Color('black'))
+        string_rendered = font.render(line, 1, pygame.Color('white'))
         intro_rect = string_rendered.get_rect()
         text_coord += 10
         intro_rect.top = text_coord
@@ -155,7 +156,9 @@ def start_screen():
 
 def main_game():
     motion = M_STOP
-    player, level_x, level_y = generate_level(load_level('map.txt'))
+    level = load_level('map.txt')
+    # pprint(level)
+    player, level_x, level_y = generate_level(level)
     while True:
         for i in pygame.event.get():
             if i.type == pygame.QUIT:
@@ -177,13 +180,17 @@ def main_game():
                     motion = M_STOP
         screen.fill(pygame.Color("black"))
         if motion == M_LEFT:
-            player.move_to(-STEP, 0)
+            if level[player.x - 1][player.y] != '#':
+                player.move_to(-STEP, 0)
         elif motion == M_RIGHT:
-            player.move_to(STEP, 0)
+            if level[player.x + 1][player.y] != '#':
+                player.move_to(STEP, 0)
         elif motion == M_UP:
-            player.move_to(0, -STEP)
+            if level[player.x][player.y - 1] != '#':
+                player.move_to(0, -STEP)
         elif motion == M_DOWN:
-            player.move_to(0, STEP)
+            if level[player.x][player.y + 1] != '#':
+                player.move_to(0, STEP)
 
         if motion != M_STOP:
             time.sleep(0.15)
