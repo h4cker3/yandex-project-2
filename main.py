@@ -1,5 +1,5 @@
 # This is main file of project
-# Last commit: added a collision with blocks
+# Last commit: added a improved motion to player
 # MAIN TODO: create a good map for testing
 import pygame
 import sys
@@ -22,6 +22,7 @@ M_RIGHT = 1
 M_LEFT = 2
 M_UP = 3
 M_DOWN = 4
+M_MOVING = 10**9
 
 
 def load_image(name, colorkey=None):
@@ -164,6 +165,8 @@ def main_game():
             if i.type == pygame.QUIT:
                 terminate()
             elif i.type == pygame.KEYDOWN:
+                if motion != M_STOP:
+                    continue
                 if i.key == pygame.K_LEFT:
                     motion = M_LEFT
                 elif i.key == pygame.K_RIGHT:
@@ -176,24 +179,25 @@ def main_game():
                 if i.key in [pygame.K_LEFT,
                              pygame.K_RIGHT,
                              pygame.K_UP,
-                             pygame.K_DOWN]:
+                             pygame.K_DOWN] and motion == M_MOVING:
                     motion = M_STOP
         screen.fill(pygame.Color("black"))
         if motion == M_LEFT:
             if level[player.x - 1][player.y] != '#':
                 player.move_to(-STEP, 0)
+            motion = M_MOVING
         elif motion == M_RIGHT:
             if level[player.x + 1][player.y] != '#':
                 player.move_to(STEP, 0)
+            motion = M_MOVING
         elif motion == M_UP:
             if level[player.x][player.y - 1] != '#':
                 player.move_to(0, -STEP)
+            motion = M_MOVING
         elif motion == M_DOWN:
             if level[player.x][player.y + 1] != '#':
                 player.move_to(0, STEP)
-
-        if motion != M_STOP:
-            time.sleep(0.15)
+            motion = M_MOVING
         camera.update(player)
         for sprite in all_sprites:
             camera.apply(sprite)
