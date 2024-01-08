@@ -7,6 +7,9 @@ import os
 import time
 from pprint import pprint
 from random import choice
+from numpy import floor
+from perlin_noise import PerlinNoise
+import matplotlib.pyplot as plt
 
 FPS = 50
 
@@ -26,6 +29,28 @@ M_DOWN = 4
 M_MOVING = 10 ** 9
 M_MOVED = 11 ** 9
 MOVES = [[STEP, 0], [-STEP, 0], [0, STEP], [0, -STEP]]
+# Константы генерации карты
+SEED = 4522
+amp = 6
+period = 30
+terrain_width = 100
+
+
+def generate_landscale(seed=SEED):
+    noise = PerlinNoise(octaves=2, seed=seed)
+    landscale = [[0 for i in range(terrain_width)] for i in range(terrain_width)]
+
+    for position in range(terrain_width ** 2):
+        x = floor(position / terrain_width)
+        z = floor(position % terrain_width)
+        y = floor(noise([x / period, z / period]) * amp)
+        landscale[int(x)][int(z)] = int(y)
+    return landscale
+
+
+def show_map_pic():
+    plt.imshow(generate_landscale())
+    plt.show()
 
 
 def load_image(name, colorkey=None):
@@ -77,6 +102,42 @@ player_group = pygame.sprite.Group()
 
 
 # TODO: REFACTOR THE CLASSES
+
+class TextInputBox(pygame.sprite.Sprite):
+    def __init__(self, x, y, w, font):
+        super().__init__()
+        self.color = (255, 255, 255)
+        self.backcolor = None
+        self.pos = (x, y)
+        self.width = w
+        self.font = font
+        self.active = False
+        self.text = ""
+        self.render_text()
+
+    def render_text(self):
+        t_surf = self.font.render(self.text, True, self.color, self.backcolor)
+        self.image = pygame.Surface((max(self.width, t_surf.get_width() + 10), t_surf.get_height() + 10),
+                                    pygame.SRCALPHA)
+        if self.backcolor:
+            self.image.fill(self.backcolor)
+        self.image.blit(t_surf, (5, 5))
+        pygame.draw.rect(self.image, self.color, self.image.get_rect().inflate(-2, -2), 2)
+        self.rect = self.image.get_rect(topleft=self.pos)
+
+    def update(self, event_list):
+        for event in event_list:
+            if event.type == pygame.MOUSEBUTTONDOWN and not self.active:
+                self.active = self.rect.collidepoint(event.pos)
+            if event.type == pygame.KEYDOWN and self.active:
+                if event.key == pygame.K_RETURN:
+                    self.active = False
+                elif event.key == pygame.K_BACKSPACE:
+                    self.text = self.text[:-1]
+                else:
+                    self.text += event.unicode
+                self.render_text()
+
 
 class Tile(pygame.sprite.Sprite):
     def __init__(self, tile_type, pos_x, pos_y):
@@ -154,7 +215,7 @@ class Enemy(Unit):
         self.move_by(*move)
 
 
-def generate_level(level):
+def generate_level_by_file(level):
     # TODO: исправить генерацию карты (случайным образом + шум)
     new_player, x, y = None, None, None
     enemies = []
@@ -171,6 +232,32 @@ def generate_level(level):
                 Tile('empty', x, y)
                 enemies.append(Enemy(x, y))
     return new_player, x, y, enemies
+
+
+def generate_level(seed=SEED):
+    level = generate_landscale(seed)
+    lvl = [['.' for i in range(terrain_width)] for i in range(terrain_width)]
+    new_player, x, y = None, None, None
+    enemies = []
+    for y in range(len(level)):
+        for x in range(len(level[y])):
+            if level[y][x] > 0:
+                Tile('empty', x, y)
+                lvl[x][y] = '.'
+            elif 0 > level[y][x] != -3:
+                Tile('wall', x, y)
+                lvl[x][y] = '#'
+            elif level[y][x] == 0:
+                Tile('empty', x, y)
+                if new_player:
+                    new_player.die()
+                new_player = Player(x, y)
+                lvl[x][y] = '@'
+            elif level[y][x] == -3:
+                Tile('empty', x, y)
+                enemies.append(Enemy(x, y))
+                lvl[x][y] = 'e'
+    return new_player, x, y, enemies, lvl
 
 
 class Camera:
@@ -192,9 +279,8 @@ camera = Camera()
 
 def start_screen():
     intro_text = ["AI EVOLUTION", "",
-                  "Правила игры",
-                  "Если в правилах несколько строк,",
-                  "приходится выводить их построчно"]
+                  "Игра, где тебе предстоить победить ИИ",
+                  "Нажми на экран, чтобы начать", ]
     pygame.init()
     fon = pygame.transform.scale(load_image('fon.png'), (WIDTH, HEIGHT))
     screen.blit(fon, (0, 0))
@@ -220,11 +306,63 @@ def start_screen():
         clock.tick(FPS)
 
 
-def main_game():
+def new_game():
+    intro_text = ["SEED:", "",
+                  "seed - уникальный код,",
+                  "отвечающий за генерацию уровня",
+                  "оставь поле пустым, если не знаешь что это"]
+    pygame.init()
+    fon = pygame.transform.scale(load_image('fon.png'), (WIDTH, HEIGHT))
+    screen.blit(fon, (0, 0))
+    font = pygame.font.Font(None, 30)
+    text_coord = 50
+    for line in intro_text:
+        string_rendered = font.render(line, 1, pygame.Color('white'))
+        intro_rect = string_rendered.get_rect()
+        text_coord += 10
+        intro_rect.top = text_coord
+        intro_rect.x = 10
+        text_coord += intro_rect.height
+        screen.blit(string_rendered, intro_rect)
+    text_box = TextInputBox(78, 57, 30, font)
+    text_box_group = pygame.sprite.Group(text_box)
+    text_box.active = True
+    while True:
+        event_list = pygame.event.get()
+        for event in event_list:
+            if event.type == pygame.QUIT:
+                terminate()
+        text_box_group.update(event_list)
+        screen.blit(fon, (0, 0))
+        font = pygame.font.Font(None, 30)
+        text_coord = 50
+        for line in intro_text:
+            string_rendered = font.render(line, 1, pygame.Color('white'))
+            intro_rect = string_rendered.get_rect()
+            text_coord += 10
+            intro_rect.top = text_coord
+            intro_rect.x = 10
+            text_coord += intro_rect.height
+            screen.blit(string_rendered, intro_rect)
+        text_box_group.draw(screen)
+        if not text_box.active:
+            print(text_box.text)
+            return text_box.text
+        pygame.display.flip()
+        clock.tick(FPS)
+
+
+def check_coords(level, x, y):
+    if 0 <= x < len(level):
+        return 0 <= y < len(level[x])
+    return False
+
+
+def main_game(seed=SEED):
     motion = M_STOP
-    level = load_level('map.txt')
+    # level = load_level('map.txt')
     # pprint(level)
-    player, level_x, level_y, enemies = generate_level(level)
+    player, level_x, level_y, enemies, level = generate_level(seed)
     while True:
         events = pygame.event.get()
         pressed = False
@@ -248,25 +386,25 @@ def main_game():
                     motion = M_DOWN
         screen.fill(pygame.Color("black"))
         if motion == M_LEFT:
-            if level[player.x - 1][player.y] != '#':
+            if check_coords(level, player.x - 1, player.y) and level[player.x - 1][player.y] != '#':
                 player.move_by(-STEP, 0)
             motion = M_MOVING
         elif motion == M_RIGHT:
-            if level[player.x + 1][player.y] != '#':
+            if check_coords(level, player.x + 1, player.y) and level[player.x + 1][player.y] != '#':
                 player.move_by(STEP, 0)
             motion = M_MOVING
         elif motion == M_UP:
-            if level[player.x][player.y - 1] != '#':
+            if check_coords(level, player.x, player.y - 1) and level[player.x][player.y - 1] != '#':
                 player.move_by(0, -STEP)
             motion = M_MOVING
         elif motion == M_DOWN:
-            if level[player.x][player.y + 1] != '#':
+            if check_coords(level, player.x, player.y + 1) and level[player.x][player.y + 1] != '#':
                 player.move_by(0, STEP)
             motion = M_MOVING
         if pressed:
             for unit in all_units:
                 unit.update()
-                if level[unit.x][unit.y] == '#':
+                if check_coords(level, unit.x, unit.y) and level[unit.x][unit.y] == '#':
                     unit.reverse_movement()
             camera.update(player)
             for sprite in all_sprites:
@@ -284,5 +422,8 @@ def main_game():
         clock.tick(FPS)
 
 
+# pygame.quit()
+# show_map_pic()
+
 start_screen()
-main_game()
+main_game(int(new_game()))
