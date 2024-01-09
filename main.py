@@ -1,6 +1,8 @@
 # This is main file of project
-# Last commit: added a improved motion to player
-# MAIN TODO: create a good map for testing
+# Last commit: Added a beautiful tiles and generation
+# MAIN TODO: make a battle mode and AI generation
+import random
+
 import pygame
 import sys
 import os
@@ -32,7 +34,7 @@ MOVES = [[STEP, 0], [-STEP, 0], [0, STEP], [0, -STEP]]
 # Константы генерации карты
 SEED = 4522
 amp = 6
-period = 30
+period = 16
 terrain_width = 100
 
 
@@ -85,19 +87,22 @@ def terminate():
 
 
 tile_images = {
-    'wall': load_image('box.png'),
-    'empty': load_image('grass.png')
+    'empty': load_image('sand.png'),
+    'sand': load_image('sand.png'),
+    'grass': load_image('grass.png'),
+    'rock': load_image('rock.png')
 }
-player_image = load_image('player.png', -1)
-enemy_image = load_image('enemy.png', -1)
+player_image = load_image('player.png')
+enemies_images = [load_image('enemy1.png'), load_image('enemy2.png'), load_image('enemy3.png')]
+orbes_images = [load_image('str_orb.png'), load_image('spd_orb.png'), load_image('mana_orb.png')]
+atebles_images = [load_image('eat1.png'), load_image('eat2.png')]
 
 tile_width = tile_height = 50
-
-player = None
 
 all_sprites = pygame.sprite.Group()
 tiles_group = pygame.sprite.Group()
 units_group = pygame.sprite.Group()
+pickable_group = pygame.sprite.Group()
 player_group = pygame.sprite.Group()
 
 
@@ -197,7 +202,8 @@ def calculate(matrix, data):
 
 class Enemy(Unit):
     def __init__(self, pos_x, pos_y, matrix=None):
-        super().__init__(pos_x, pos_y, enemy_image, [300, 10, 10, 10])
+        self.type = choice(range(3))
+        super().__init__(pos_x, pos_y, enemies_images[self.type], [300, 10, 10, 10])
         self.matrix = matrix
         self.last_move = MOVES[0]
 
@@ -215,23 +221,57 @@ class Enemy(Unit):
         self.move_by(*move)
 
 
-def generate_level_by_file(level):
-    # TODO: исправить генерацию карты (случайным образом + шум)
-    new_player, x, y = None, None, None
-    enemies = []
-    for y in range(len(level)):
-        for x in range(len(level[y])):
-            if level[y][x] == '.':
-                Tile('empty', x, y)
-            elif level[y][x] == '#':
-                Tile('wall', x, y)
-            elif level[y][x] == '@':
-                Tile('empty', x, y)
-                new_player = Player(x, y)
-            elif level[y][x] == 'e':
-                Tile('empty', x, y)
-                enemies.append(Enemy(x, y))
-    return new_player, x, y, enemies
+all_pickables = []
+
+
+class Pickable(pygame.sprite.Sprite):
+    def __init__(self, pos_x, pos_y, image):
+        super().__init__(pickable_group, all_sprites)
+        self.image = image
+        self.x = pos_x
+        self.y = pos_y
+        self.rect = self.image.get_rect().move(
+            tile_width * pos_x, tile_height * pos_y)
+        all_pickables.append(self)
+
+    def try_to_pick(self, u: Unit):
+        if u.x == self.x and u.y == self.y:
+            self.pick(u)
+
+    def pick(self, u: Unit):
+        pass
+
+    def die(self):
+        all_pickables.remove(self)
+        self.kill()
+
+
+class Orb(Pickable):
+    def __init__(self, x, y, type):
+        super().__init__(x, y, orbes_images[type])
+        self.type = type
+
+    def pick(self, u: Unit):
+        u.attr[self.type] += 2
+        self.die()
+
+
+# def generate_level_by_file(level):
+#     new_player, x, y = None, None, None
+#     enemies = []
+#     for y in range(len(level)):
+#         for x in range(len(level[y])):
+#             if level[y][x] == '.':
+#                 Tile('empty', x, y)
+#             elif level[y][x] == '#':
+#                 Tile('wall', x, y)
+#             elif level[y][x] == '@':
+#                 Tile('empty', x, y)
+#                 new_player = Player(x, y)
+#             elif level[y][x] == 'e':
+#                 Tile('empty', x, y)
+#                 enemies.append(Enemy(x, y))
+#     return new_player, x, y, enemies
 
 
 def generate_level(seed=SEED):
@@ -241,22 +281,20 @@ def generate_level(seed=SEED):
     enemies = []
     for y in range(len(level)):
         for x in range(len(level[y])):
-            if level[y][x] > 0:
-                Tile('empty', x, y)
+            if -1 <= level[y][x] <= 1:
+                Tile('sand', x, y)
                 lvl[x][y] = '.'
-            elif 0 > level[y][x] != -3:
-                Tile('wall', x, y)
-                lvl[x][y] = '#'
-            elif level[y][x] == 0:
-                Tile('empty', x, y)
-                if new_player:
-                    new_player.die()
-                new_player = Player(x, y)
-                lvl[x][y] = '@'
-            elif level[y][x] == -3:
-                Tile('empty', x, y)
+            elif -1 > level[y][x]:
+                Tile('rock', x, y)
+                lvl[x][y] = '.'
+                if level[y][x] < -2:
+                    Orb(x, y, choice(range(3)))
+            elif level[y][x] > 1:
+                Tile('grass', x, y)
+                lvl[x][y] = '.'
                 enemies.append(Enemy(x, y))
                 lvl[x][y] = 'e'
+    new_player = Player(x // 2, y // 2)
     return new_player, x, y, enemies, lvl
 
 
@@ -358,10 +396,28 @@ def check_coords(level, x, y):
     return False
 
 
+def draw_menu(player):
+    pygame.draw.rect(screen, pygame.color.Color('white'), [0, 0, 1000, 80])
+    font = pygame.font.Font(None, 30)
+    screen.blit(load_image('eat1.png'), [0, 0])
+    stat1 = font.render(str(player.eat), 1, pygame.Color('black'))
+    screen.blit(stat1, [10, 55])
+    screen.blit(load_image('str_orb.png'), [50, 0])
+    stat2 = font.render(str(player.attr[0]), 1, pygame.Color('black'))
+    screen.blit(stat2, [62, 55])
+    screen.blit(load_image('spd_orb.png'), [100, 0])
+    stat3 = font.render(str(player.attr[1]), 1, pygame.Color('black'))
+    screen.blit(stat3, [112, 55])
+    screen.blit(load_image('mana_orb.png'), [150, 0])
+    stat3 = font.render(str(player.attr[2]), 1, pygame.Color('black'))
+    screen.blit(stat3, [162, 55])
+
+
 def main_game(seed=SEED):
     motion = M_STOP
     # level = load_level('map.txt')
     # pprint(level)
+    random.seed(seed)
     player, level_x, level_y, enemies, level = generate_level(seed)
     while True:
         events = pygame.event.get()
@@ -404,13 +460,17 @@ def main_game(seed=SEED):
         if pressed:
             for unit in all_units:
                 unit.update()
-                if check_coords(level, unit.x, unit.y) and level[unit.x][unit.y] == '#':
+                if not check_coords(level, unit.x, unit.y) or level[unit.x][unit.y] == '#':
                     unit.reverse_movement()
+                else:
+                    for p in all_pickables:
+                        p.try_to_pick(unit)
             camera.update(player)
             for sprite in all_sprites:
                 camera.apply(sprite)
         tiles_group.draw(screen)
         units_group.draw(screen)
+        pickable_group.draw(screen)
         for i in events:
             if i.type == pygame.KEYUP:
                 if i.key in [pygame.K_LEFT,
@@ -418,6 +478,7 @@ def main_game(seed=SEED):
                              pygame.K_UP,
                              pygame.K_DOWN] and motion == M_MOVING:
                     motion = M_STOP
+        draw_menu(player)
         pygame.display.flip()
         clock.tick(FPS)
 
