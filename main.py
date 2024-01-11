@@ -1,5 +1,5 @@
 # This is main file of project
-# Last commit: Added a background and bugfix
+# Last commit: Big bugfix and improved battle menu
 # MAIN TODO: make a battle mode and AI generation
 import random
 
@@ -112,6 +112,7 @@ tile_images = {
     'rock': load_image('rock.png')
 }
 player_image = load_image('player.png')
+box_image = load_image('box.png')
 fon_image = load_image('new_fon_wr.jpg')
 enemies_images = [load_image('enemy1.png'), load_image('enemy2.png'), load_image('enemy3.png')]
 orbes_images = [load_image('str_orb.png'), load_image('spd_orb.png'), load_image('mana_orb.png')]
@@ -194,7 +195,10 @@ class Unit(pygame.sprite.Sprite):
 
     def die(self):
         self.alive = False
-        all_units.remove(self)
+        try:
+            all_units.remove(self)
+        except:
+            pass
         self.kill()
 
     def movement(self, level):
@@ -225,7 +229,9 @@ def get_elem_by_coord(lvl, x, y):
 class Enemy(Unit):
     def __init__(self, pos_x, pos_y, matrix=None):
         self.type = choice(range(3))
-        super().__init__(pos_x, pos_y, enemies_images[self.type], [100, 10, 10, 10])
+        attri = [500, 10, 10, 10]
+        attri[self.type + 1] = 40
+        super().__init__(pos_x, pos_y, enemies_images[self.type], attri)
         self.matrix = matrix
         self.last_move = MOVES[0]
 
@@ -399,8 +405,7 @@ def start_screen():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 terminate()
-            elif event.type == pygame.KEYDOWN or \
-                    event.type == pygame.MOUSEBUTTONDOWN:
+            elif event.type == pygame.MOUSEBUTTONDOWN:
                 gameplay = True
         pygame.display.flip()
         clock.tick(FPS)
@@ -411,7 +416,6 @@ def new_game():
                   "seed - уникальный код,",
                   "отвечающий за генерацию уровня",
                   "оставь поле пустым, если не знаешь что это"]
-    pygame.init()
     fon = pygame.transform.scale(fon_image, (WIDTH, HEIGHT))
     screen.blit(fon, (0, 0))
     font = pygame.font.Font(None, 40)
@@ -447,7 +451,7 @@ def new_game():
         text_box_group.draw(screen)
         if not text_box.active:
             print(text_box.text)
-            return text_box.text
+            return text_box.text if text_box.text else SEED
         pygame.display.flip()
         clock.tick(FPS)
 
@@ -475,7 +479,98 @@ def draw_menu(player):
     screen.blit(stat3, [162, 55])
 
 
+def battle(u1: Unit, u2: Unit):
+    i = random.randrange(0, 3)
+    if u1.attr[i] >= u2.attr[i]:
+        u1.eat += u2.eat // 2
+        u1.attr[i] += (u2.attr[i] - u1.attr[i]) // 2
+        u2.die()
+    else:
+        u2.eat += u1.eat // 2
+        u2.attr[i] += (u1.attr[i] - u2.attr[i]) // 2
+        u1.die()
+
+
+def check_nearest(u1: Unit):
+    ans = []
+    for u2 in all_units:
+        m = abs(u1.x - u2.x) + abs(u1.y - u2.y)
+        if m <= 1 and u1 != u2:
+            ans.append(u2)
+    return ans
+
+
+def menu_battle(u1, u2):
+    intro_text = ["БИТВА                        VS", "",
+                  f"Вы: Еда: {u1.eat}, Скилы: {', '.join(map(str, u1.attr))}",
+                  f"Враг: Еда: {u2.eat}, Скилы: {', '.join(map(str, u2.attr))}",
+                  "Нажмите на экран, чтоб начать сражение"]
+    font = pygame.font.Font(None, 50)
+    text_coord = 50
+    surf = pygame.Surface((WIDTH, HEIGHT))
+    surf.fill((0, 0, 0))
+    surf.set_alpha(220)
+    screen.blit(surf, (0, 0))
+    for line in intro_text:
+        string_rendered = font.render(line, 1, pygame.Color('white'))
+        intro_rect = string_rendered.get_rect()
+        text_coord += 10
+        intro_rect.top = text_coord
+        intro_rect.x = 10
+        text_coord += intro_rect.height
+        screen.blit(string_rendered, intro_rect)
+    screen.blit(u1.image, (300, 50))
+    screen.blit(u2.image, (395, 50))
+    gameplay = False
+    while not gameplay:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                terminate()
+            elif event.type == pygame.MOUSEBUTTONDOWN or (event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN):
+                gameplay = True
+        pygame.display.flip()
+        clock.tick(FPS)
+    battle(u1, u2)
+    intro_text[4] = f"Исход битвы: победитель - {'вы' if u1.alive else 'враг'}"
+    tiles_group.draw(screen)
+    units_group.draw(screen)
+    pickable_group.draw(screen)
+    draw_menu(u1)
+    pygame.display.flip()
+    text_coord = 50
+    surf = pygame.Surface((WIDTH, HEIGHT))
+    surf.fill((0, 0, 0))
+    surf.set_alpha(220)
+    screen.blit(surf, (0, 0))
+    screen.blit(u1.image if u1.alive else box_image, (300, 50))
+    screen.blit(u2.image if u2.alive else box_image, (395, 50))
+    for line in intro_text:
+        string_rendered = font.render(line, 1, pygame.Color('white'))
+        intro_rect = string_rendered.get_rect()
+        text_coord += 10
+        intro_rect.top = text_coord
+        intro_rect.x = 10
+        text_coord += intro_rect.height
+        screen.blit(string_rendered, intro_rect)
+    gameplay = False
+    while not gameplay:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                terminate()
+            elif event.type == pygame.MOUSEBUTTONDOWN or (event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN):
+                gameplay = True
+        pygame.display.flip()
+        clock.tick(FPS)
+
+
 def main_game(seed=SEED):
+    all_units.clear()
+    all_pickables.clear()
+    all_sprites.empty()
+    units_group.empty()
+    pickable_group.empty()
+    tiles_group.empty()
+    player_group.empty()
     motion = M_STOP
     # level = load_level('map.txt')
     # pprint(level)
@@ -555,10 +650,20 @@ def main_game(seed=SEED):
                              pygame.K_DOWN] and motion == M_MOVING:
                     motion = M_STOP
         draw_menu(player)
+        pygame.display.flip()
         if not player.alive:
             score += sum([(i - 10) * 100 for i in player.attr])
             return score
-        pygame.display.flip()
+        for u in check_nearest(player):
+            menu_battle(player, u)
+            tiles_group.draw(screen)
+            units_group.draw(screen)
+            pickable_group.draw(screen)
+            draw_menu(player)
+            pygame.display.flip()
+            if not player.alive:
+                score += sum([(i - 10) * 100 for i in player.attr])
+                return score
         clock.tick(FPS)
 
 
@@ -566,7 +671,6 @@ def end_game(score):
     intro_text = ["GAME END", "",
                   f"Счет: {score}",
                   "Нажми на экран, чтобы начать новую игру"]
-    pygame.init()
     font = pygame.font.Font(None, 50)
     text_coord = 50
     surf = pygame.Surface((WIDTH, HEIGHT))
@@ -586,8 +690,7 @@ def end_game(score):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 terminate()
-            elif event.type == pygame.KEYDOWN or \
-                    event.type == pygame.MOUSEBUTTONDOWN:
+            elif event.type == pygame.MOUSEBUTTONDOWN:
                 gameplay = True
         pygame.display.flip()
         clock.tick(FPS)
