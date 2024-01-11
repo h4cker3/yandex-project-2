@@ -1,17 +1,16 @@
 # This is main file of project
-# Last commit: Bugfix
+# Last commit: GUI improved and hardness
 # MAIN TODO: make a battle mode and AI generation
 import random
-
+import logging
 import pygame
 import sys
 import os
-import time
-from pprint import pprint
 from random import choice
 from numpy import floor
+import time
+import perlin_noise
 from perlin_noise import PerlinNoise
-import matplotlib.pyplot as plt
 
 FPS = 50
 
@@ -71,11 +70,6 @@ def generate_landscale(seed=SEED):
     return landscale
 
 
-def show_map_pic():
-    plt.imshow(generate_landscale())
-    plt.show()
-
-
 def load_image(name, colorkey=None):
     fullname = os.path.join('data', name)
     if not os.path.isfile(fullname):
@@ -132,7 +126,7 @@ player_group = pygame.sprite.Group()
 # TODO: REFACTOR THE CLASSES
 
 class TextInputBox(pygame.sprite.Sprite):
-    def __init__(self, x, y, w, font, color):
+    def __init__(self, x, y, w, font: pygame.font.Font, color):
         super().__init__()
         self.color = color
         self.backcolor = None
@@ -144,21 +138,20 @@ class TextInputBox(pygame.sprite.Sprite):
         self.render_text()
 
     def render_text(self):
+        self.font.set_bold(self.active)
         t_surf = self.font.render(self.text, True, self.color, self.backcolor)
         self.image = pygame.Surface((max(self.width, t_surf.get_width() + 10), t_surf.get_height() + 10),
                                     pygame.SRCALPHA)
         if self.backcolor:
             self.image.fill(self.backcolor)
         self.image.blit(t_surf, (5, 5))
-        pygame.draw.rect(self.image, self.color, self.image.get_rect().inflate(-2, -2), 2)
+        pygame.draw.rect(self.image, self.color, self.image.get_rect().inflate(-2, -2), 2*(2 if self.active else 1))
         self.rect = self.image.get_rect(topleft=self.pos)
 
-    def update(self, event_list, activated):
+    def update(self, event_list):
         for event in event_list:
-            if event.type == pygame.MOUSEBUTTONDOWN and not self.active:
+            if event.type == pygame.MOUSEBUTTONDOWN:
                 self.active = self.rect.collidepoint(event.pos)
-                if self.active:
-                    activated()
             if event.type == pygame.KEYDOWN and self.active:
                 if event.key == pygame.K_RETURN:
                     self.active = False
@@ -167,6 +160,7 @@ class TextInputBox(pygame.sprite.Sprite):
                 elif event.unicode in '1234567890':
                     self.text += event.unicode
                 self.render_text()
+        self.render_text()
 
 
 class Tile(pygame.sprite.Sprite):
@@ -234,7 +228,7 @@ class Enemy(Unit):
     def __init__(self, pos_x, pos_y, matrix=None):
         self.type = choice(range(3))
         attri = [500, 10, 10, 10]
-        attri[self.type + 1] = 40
+        attri[self.type + 1] += 10 * BASE_LEVEL
         super().__init__(pos_x, pos_y, enemies_images[self.type], attri)
         self.matrix = matrix
         self.last_move = MOVES[0]
@@ -318,7 +312,7 @@ class Food(Pickable):
         self.type = type
 
     def pick(self, u: Unit):
-        u.eat += 10 + self.type * 40
+        u.eat += 11 + self.type * 40 - (BASE_LEVEL//3)*5
         self.die()
 
 
@@ -350,19 +344,19 @@ def generate_level(seed=SEED):
             if -1 <= level[y][x] < 1:
                 Tile('sand', x, y)
                 lvl[x][y] = 's'
-                if level[y][x] == 0 and random.randint(1, 30) == 30:
+                if level[y][x] == 0 and random.randint(1, 30 - (BASE_LEVEL - 1)*5) == 1:
                     enemies.append(Enemy(x, y, matrix=max_matrix))
             elif -1 > level[y][x]:
                 Tile('rock', x, y)
                 lvl[x][y] = 'r'
-                if level[y][x] < -2 and random.randint(1, 3) == 3:
+                if level[y][x] < -2 and random.randint(1, BASE_LEVEL + 2) == 1:
                     Orb(x, y, choice(range(3)))
                     lvl[x][y] = 'o'
             elif level[y][x] >= 1:
                 Tile('grass', x, y)
                 lvl[x][y] = 'g'
                 if level[y][x] > 1:
-                    Food(x, y, int(random.randrange(6) == 5))
+                    Food(x, y, int(random.randrange(5 + BASE_LEVEL) == 5))
                     lvl[x][y] = 'e'
                 # enemies.append(Enemy(x, y))
                 # lvl[x][y] = 'e'
@@ -421,7 +415,7 @@ def new_game():
                   "отвечающий за генерацию уровня",
                   "оставь поле пустым, если не знаешь что это",
                   "LVL:", ""
-                  "уровень сложности, от 1 до 3 (иначе 1)"]
+                          "уровень сложности, от 1 до 3 (иначе 1)"]
     fon = pygame.transform.scale(fon_image, (WIDTH, HEIGHT))
     screen.blit(fon, (0, 0))
     font = pygame.font.Font(None, 40)
@@ -435,24 +429,20 @@ def new_game():
         intro_rect.x = 10
         text_coord += intro_rect.height
         screen.blit(string_rendered, intro_rect)
-    text_box = TextInputBox(100, 50, 50, font, pygame.Color('purple'))
-    text_box2 = TextInputBox(100, 240, 50, font, pygame.Color('purple'))
+    text_box = TextInputBox(100, 50, 50, pygame.font.Font(None, 40), pygame.Color('purple'))
+    text_box2 = TextInputBox(100, 240, 50, pygame.font.Font(None, 40), pygame.Color('purple'))
     text_box_group = pygame.sprite.Group(text_box, text_box2)
     while True:
         event_list = pygame.event.get()
         for event in event_list:
             if event.type == pygame.QUIT:
                 terminate()
-            elif event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN and text_box.active == text_box2.active == False:
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
+                global BASE_LEVEL
                 BASE_LEVEL = int(text_box2.text) if int(text_box2.text) in [1, 2, 3] else 1
                 print(BASE_LEVEL)
                 return text_box.text if text_box.text else SEED
-        def deact(t):
-            def f():
-                t.active = False
-            return f
-        text_box.update(event_list, deact(text_box2))
-        text_box2.update(event_list, deact(text_box))
+        text_box_group.update(event_list)
         screen.blit(fon, (0, 0))
         text_coord = 50
         for line in intro_text:
@@ -539,7 +529,8 @@ def menu_battle(u1, u2):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 terminate()
-            elif event.type == pygame.MOUSEBUTTONDOWN or (event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN):
+            elif event.type == pygame.MOUSEBUTTONDOWN or (
+                    event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN):
                 gameplay = True
         pygame.display.flip()
         clock.tick(FPS)
@@ -570,7 +561,8 @@ def menu_battle(u1, u2):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 terminate()
-            elif event.type == pygame.MOUSEBUTTONDOWN or (event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN):
+            elif event.type == pygame.MOUSEBUTTONDOWN or (
+                    event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN):
                 gameplay = True
         pygame.display.flip()
         clock.tick(FPS)
