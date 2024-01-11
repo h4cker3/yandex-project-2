@@ -1,5 +1,5 @@
 # This is main file of project
-# Last commit: Big bugfix and improved battle menu
+# Last commit: Bugfix
 # MAIN TODO: make a battle mode and AI generation
 import random
 
@@ -45,6 +45,8 @@ tile_codes = {
     'g': 4,
     '@': 12
 }
+
+BASE_LEVEL = 1
 
 max_matrix = [6.82, 20.10804, 9.8388, 8.53, 36.588145999999995, 5.33, 6.84, 4.29, 9.87, 7.82, 28.241325, 7.37]
 
@@ -151,10 +153,12 @@ class TextInputBox(pygame.sprite.Sprite):
         pygame.draw.rect(self.image, self.color, self.image.get_rect().inflate(-2, -2), 2)
         self.rect = self.image.get_rect(topleft=self.pos)
 
-    def update(self, event_list):
+    def update(self, event_list, activated):
         for event in event_list:
             if event.type == pygame.MOUSEBUTTONDOWN and not self.active:
                 self.active = self.rect.collidepoint(event.pos)
+                if self.active:
+                    activated()
             if event.type == pygame.KEYDOWN and self.active:
                 if event.key == pygame.K_RETURN:
                     self.active = False
@@ -415,10 +419,13 @@ def new_game():
     intro_text = ["SEED:", "",
                   "seed - уникальный код,",
                   "отвечающий за генерацию уровня",
-                  "оставь поле пустым, если не знаешь что это"]
+                  "оставь поле пустым, если не знаешь что это",
+                  "LVL:", ""
+                  "уровень сложности, от 1 до 3 (иначе 1)"]
     fon = pygame.transform.scale(fon_image, (WIDTH, HEIGHT))
     screen.blit(fon, (0, 0))
     font = pygame.font.Font(None, 40)
+    font.bold = True
     text_coord = 50
     for line in intro_text:
         string_rendered = font.render(line, 1, pygame.Color('purple'))
@@ -429,16 +436,24 @@ def new_game():
         text_coord += intro_rect.height
         screen.blit(string_rendered, intro_rect)
     text_box = TextInputBox(100, 50, 50, font, pygame.Color('purple'))
-    text_box_group = pygame.sprite.Group(text_box)
-    text_box.active = True
+    text_box2 = TextInputBox(100, 240, 50, font, pygame.Color('purple'))
+    text_box_group = pygame.sprite.Group(text_box, text_box2)
     while True:
         event_list = pygame.event.get()
         for event in event_list:
             if event.type == pygame.QUIT:
                 terminate()
-        text_box_group.update(event_list)
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN and text_box.active == text_box2.active == False:
+                BASE_LEVEL = int(text_box2.text) if int(text_box2.text) in [1, 2, 3] else 1
+                print(BASE_LEVEL)
+                return text_box.text if text_box.text else SEED
+        def deact(t):
+            def f():
+                t.active = False
+            return f
+        text_box.update(event_list, deact(text_box2))
+        text_box2.update(event_list, deact(text_box))
         screen.blit(fon, (0, 0))
-        font = pygame.font.Font(None, 40)
         text_coord = 50
         for line in intro_text:
             string_rendered = font.render(line, 1, pygame.Color('purple'))
@@ -449,9 +464,6 @@ def new_game():
             text_coord += intro_rect.height
             screen.blit(string_rendered, intro_rect)
         text_box_group.draw(screen)
-        if not text_box.active:
-            print(text_box.text)
-            return text_box.text if text_box.text else SEED
         pygame.display.flip()
         clock.tick(FPS)
 
@@ -482,12 +494,13 @@ def draw_menu(player):
 def battle(u1: Unit, u2: Unit):
     i = random.randrange(0, 3)
     if u1.attr[i] >= u2.attr[i]:
-        u1.eat += u2.eat // 2
-        u1.attr[i] += (u2.attr[i] - u1.attr[i]) // 2
+        u1.eat += u2.eat // (BASE_LEVEL + 1)
+        u1.attr[i] += (u1.attr[i] - u2.attr[i] + 4) // (BASE_LEVEL + 1)
+        print(i, u1.attr[i])
         u2.die()
     else:
-        u2.eat += u1.eat // 2
-        u2.attr[i] += (u1.attr[i] - u2.attr[i]) // 2
+        u2.eat += u1.eat // (BASE_LEVEL + 1)
+        u2.attr[i] += (u2.attr[i] - u1.attr[i] + 4) // (BASE_LEVEL + 1)
         u1.die()
 
 
@@ -664,6 +677,11 @@ def main_game(seed=SEED):
             if not player.alive:
                 score += sum([(i - 10) * 100 for i in player.attr])
                 return score
+        for u1 in all_units:
+            if u1 == player:
+                continue
+            for u2 in check_nearest(u1):
+                battle(u1, u2)
         clock.tick(FPS)
 
 
