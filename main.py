@@ -1,5 +1,5 @@
 # This is main file of project
-# Last commit: Added a beautiful AI
+# Last commit: Added a background and bugfix
 # MAIN TODO: make a battle mode and AI generation
 import random
 
@@ -112,6 +112,7 @@ tile_images = {
     'rock': load_image('rock.png')
 }
 player_image = load_image('player.png')
+fon_image = load_image('new_fon_wr.jpg')
 enemies_images = [load_image('enemy1.png'), load_image('enemy2.png'), load_image('enemy3.png')]
 orbes_images = [load_image('str_orb.png'), load_image('spd_orb.png'), load_image('mana_orb.png')]
 atebles_images = [load_image('eat1.png'), load_image('eat2.png')]
@@ -128,9 +129,9 @@ player_group = pygame.sprite.Group()
 # TODO: REFACTOR THE CLASSES
 
 class TextInputBox(pygame.sprite.Sprite):
-    def __init__(self, x, y, w, font):
+    def __init__(self, x, y, w, font, color):
         super().__init__()
-        self.color = (255, 255, 255)
+        self.color = color
         self.backcolor = None
         self.pos = (x, y)
         self.width = w
@@ -158,7 +159,7 @@ class TextInputBox(pygame.sprite.Sprite):
                     self.active = False
                 elif event.key == pygame.K_BACKSPACE:
                     self.text = self.text[:-1]
-                else:
+                elif event.unicode in '1234567890':
                     self.text += event.unicode
                 self.render_text()
 
@@ -381,12 +382,12 @@ def start_screen():
                   "Игра, где тебе предстоить победить ИИ",
                   "Нажми на экран, чтобы начать", ]
     pygame.init()
-    fon = pygame.transform.scale(load_image('fon.png'), (WIDTH, HEIGHT))
+    fon = pygame.transform.scale(fon_image, (WIDTH, HEIGHT))
     screen.blit(fon, (0, 0))
-    font = pygame.font.Font(None, 30)
+    font = pygame.font.Font(None, 40)
     text_coord = 50
     for line in intro_text:
-        string_rendered = font.render(line, 1, pygame.Color('white'))
+        string_rendered = font.render(line, 1, pygame.Color('purple'))
         intro_rect = string_rendered.get_rect()
         text_coord += 10
         intro_rect.top = text_coord
@@ -411,19 +412,19 @@ def new_game():
                   "отвечающий за генерацию уровня",
                   "оставь поле пустым, если не знаешь что это"]
     pygame.init()
-    fon = pygame.transform.scale(load_image('fon.png'), (WIDTH, HEIGHT))
+    fon = pygame.transform.scale(fon_image, (WIDTH, HEIGHT))
     screen.blit(fon, (0, 0))
-    font = pygame.font.Font(None, 30)
+    font = pygame.font.Font(None, 40)
     text_coord = 50
     for line in intro_text:
-        string_rendered = font.render(line, 1, pygame.Color('white'))
+        string_rendered = font.render(line, 1, pygame.Color('purple'))
         intro_rect = string_rendered.get_rect()
         text_coord += 10
         intro_rect.top = text_coord
         intro_rect.x = 10
         text_coord += intro_rect.height
         screen.blit(string_rendered, intro_rect)
-    text_box = TextInputBox(78, 57, 30, font)
+    text_box = TextInputBox(100, 50, 50, font, pygame.Color('purple'))
     text_box_group = pygame.sprite.Group(text_box)
     text_box.active = True
     while True:
@@ -433,10 +434,10 @@ def new_game():
                 terminate()
         text_box_group.update(event_list)
         screen.blit(fon, (0, 0))
-        font = pygame.font.Font(None, 30)
+        font = pygame.font.Font(None, 40)
         text_coord = 50
         for line in intro_text:
-            string_rendered = font.render(line, 1, pygame.Color('white'))
+            string_rendered = font.render(line, 1, pygame.Color('purple'))
             intro_rect = string_rendered.get_rect()
             text_coord += 10
             intro_rect.top = text_coord
@@ -481,6 +482,9 @@ def main_game(seed=SEED):
     random.seed(seed)
     player, level_x, level_y, enemies, level = generate_level(seed)
     score = 0
+    camera.update(player)
+    for sprite in all_sprites:
+        camera.apply(sprite)
     while True:
         events = pygame.event.get()
         pressed = False
