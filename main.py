@@ -1,5 +1,5 @@
 # This is main file of project
-# Last commit: Added a beautiful tiles and generation
+# Last commit: Added a beautiful AI
 # MAIN TODO: make a battle mode and AI generation
 import random
 
@@ -36,6 +36,25 @@ SEED = 4522
 amp = 6
 period = 16
 terrain_width = 100
+tile_codes = {
+    '.': 1,
+    'r': 2,
+    'o': 6,
+    's': 3,
+    'e': 5,
+    'g': 4,
+    '@': 12
+}
+
+max_matrix = [6.82, 20.10804, 9.8388, 8.53, 36.588145999999995, 5.33, 6.84, 4.29, 9.87, 7.82, 28.241325, 7.37]
+
+
+# [15.51741, 0.0, 1.11, 14.898136000000001, 290.60801018893767, 85.356137022555, 18.3721539974, 21.432317145200003, 32.66259523520238, 7.82, 10.9986286875, 188.5850342948]
+# [37.006794, 478.9033021773, 8.43, 72.54700848, 0.9024834038999999, 6.54, 2.94, 2063.9393489304625, 112.7632091943, 7.82, 6.684135, 3.918629]
+# [6.82, 20.10804, 9.8388, 8.53, 36.588145999999995, 5.33, 6.84, 4.29, 9.87, 7.82, 28.241325, 7.37]
+# [20.336370000000002, 185.17912549919998, 1.97, 1.671633222, 2.62, 7.4, 44.425445864800004, 8.929404, 2.78, 9.77, 21.22764, 6.49]
+# [3.642464, 171.3299742141, 10.7402088365, 9.3, 23.1663422592, 2.72, 2.94, 5.06, 43.300808, 8.95, 12.6812612745, 11.492172]
+# [11.524584353579515, 6796.8386980526775, 19.022295, 5346.2012853738925, 60.49509299999999, 73.60691163440032, 2034.9186754245743, 46.794374999999995, 61.24631397040001, 5.51, 663.7396091672757, 320.3145562528]
 
 
 def generate_landscale(seed=SEED):
@@ -177,40 +196,64 @@ class Unit(pygame.sprite.Sprite):
         all_units.remove(self)
         self.kill()
 
-    def movement(self):
+    def movement(self, level):
         pass
 
     def reverse_movement(self):
         pass
 
-    def update(self):
+    def update(self, *args):
         self.eat -= 1
         if self.eat <= 0:
             self.die()
-        self.movement()
+        self.movement(args[0])
 
 
 class Player(Unit):
     def __init__(self, pos_x, pos_y):
-        super().__init__(pos_x, pos_y, player_image, [300, 10, 10, 10])
+        super().__init__(pos_x, pos_y, player_image, [100, 10, 10, 10])
 
 
-def calculate(matrix, data):
-    # TODO: REFACTOR THE AI CALCULATIONS
-    return choice(MOVES)
+def get_elem_by_coord(lvl, x, y):
+    if 0 <= x < len(lvl):
+        if 0 <= y < len(lvl[x]):
+            return tile_codes[lvl[x][y]]
+    return 0
 
 
 class Enemy(Unit):
     def __init__(self, pos_x, pos_y, matrix=None):
         self.type = choice(range(3))
-        super().__init__(pos_x, pos_y, enemies_images[self.type], [300, 10, 10, 10])
+        super().__init__(pos_x, pos_y, enemies_images[self.type], [100, 10, 10, 10])
         self.matrix = matrix
         self.last_move = MOVES[0]
 
-    def movement(self):
-        data = [[0] * 10]
-        # TODO: refactor collecting data
-        move = calculate(self.matrix, data)
+    def calculate(self, data):
+        max_res = -1
+        max_move = MOVES[0]
+        for m in MOVES:
+            i = MOVES.index(m)
+            xn = self.x + m[0] // STEP
+            yn = self.y + m[1] // STEP
+            elem = get_elem_by_coord(data, xn, yn) * 10
+            res = elem * self.matrix[i * 3] + self.matrix[i * 3 + 1] + self.eat * self.matrix[i * 3 + 2]
+            if res > max_res and elem != 0:
+                max_res = res
+                max_move = m
+            xn += m[0]
+            yn += m[1]
+            elem = get_elem_by_coord(data, xn, yn) * 10
+            res = elem * self.matrix[i * 3] + self.matrix[i * 3 + 1] + self.eat * self.matrix[i * 3 + 2]
+            if res > max_res and elem != 0:
+                max_res = res
+                max_move = m
+        if max_res == -1:
+            return [0, 0]
+        return max_move
+
+    def movement(self, level):
+        data = level[:]
+        move = self.calculate(data)
         # return by move_by
         self.last_move = move
         self.move_by(*move)
@@ -237,6 +280,8 @@ class Pickable(pygame.sprite.Sprite):
     def try_to_pick(self, u: Unit):
         if u.x == self.x and u.y == self.y:
             self.pick(u)
+            return True
+        return False
 
     def pick(self, u: Unit):
         pass
@@ -253,6 +298,16 @@ class Orb(Pickable):
 
     def pick(self, u: Unit):
         u.attr[self.type] += 2
+        self.die()
+
+
+class Food(Pickable):
+    def __init__(self, x, y, type):
+        super().__init__(x, y, atebles_images[type])
+        self.type = type
+
+    def pick(self, u: Unit):
+        u.eat += 10 + self.type * 40
         self.die()
 
 
@@ -281,19 +336,25 @@ def generate_level(seed=SEED):
     enemies = []
     for y in range(len(level)):
         for x in range(len(level[y])):
-            if -1 <= level[y][x] <= 1:
+            if -1 <= level[y][x] < 1:
                 Tile('sand', x, y)
-                lvl[x][y] = '.'
+                lvl[x][y] = 's'
+                if level[y][x] == 0 and random.randint(1, 30) == 30:
+                    enemies.append(Enemy(x, y, matrix=max_matrix))
             elif -1 > level[y][x]:
                 Tile('rock', x, y)
-                lvl[x][y] = '.'
-                if level[y][x] < -2:
+                lvl[x][y] = 'r'
+                if level[y][x] < -2 and random.randint(1, 3) == 3:
                     Orb(x, y, choice(range(3)))
-            elif level[y][x] > 1:
+                    lvl[x][y] = 'o'
+            elif level[y][x] >= 1:
                 Tile('grass', x, y)
-                lvl[x][y] = '.'
-                enemies.append(Enemy(x, y))
-                lvl[x][y] = 'e'
+                lvl[x][y] = 'g'
+                if level[y][x] > 1:
+                    Food(x, y, int(random.randrange(6) == 5))
+                    lvl[x][y] = 'e'
+                # enemies.append(Enemy(x, y))
+                # lvl[x][y] = 'e'
     new_player = Player(x // 2, y // 2)
     return new_player, x, y, enemies, lvl
 
@@ -419,6 +480,7 @@ def main_game(seed=SEED):
     # pprint(level)
     random.seed(seed)
     player, level_x, level_y, enemies, level = generate_level(seed)
+    score = 0
     while True:
         events = pygame.event.get()
         pressed = False
@@ -443,28 +505,38 @@ def main_game(seed=SEED):
         screen.fill(pygame.Color("black"))
         if motion == M_LEFT:
             if check_coords(level, player.x - 1, player.y) and level[player.x - 1][player.y] != '#':
+                level[player.x][player.y] = 's'
                 player.move_by(-STEP, 0)
+                level[player.x][player.y] = '@'
             motion = M_MOVING
         elif motion == M_RIGHT:
             if check_coords(level, player.x + 1, player.y) and level[player.x + 1][player.y] != '#':
+                level[player.x][player.y] = 's'
                 player.move_by(STEP, 0)
+                level[player.x][player.y] = '@'
             motion = M_MOVING
         elif motion == M_UP:
             if check_coords(level, player.x, player.y - 1) and level[player.x][player.y - 1] != '#':
+                level[player.x][player.y] = 's'
                 player.move_by(0, -STEP)
+                level[player.x][player.y] = '@'
             motion = M_MOVING
         elif motion == M_DOWN:
             if check_coords(level, player.x, player.y + 1) and level[player.x][player.y + 1] != '#':
+                level[player.x][player.y] = 's'
                 player.move_by(0, STEP)
+                level[player.x][player.y] = '@'
             motion = M_MOVING
         if pressed:
             for unit in all_units:
-                unit.update()
+                score += 1
+                unit.update(level)
                 if not check_coords(level, unit.x, unit.y) or level[unit.x][unit.y] == '#':
                     unit.reverse_movement()
                 else:
                     for p in all_pickables:
-                        p.try_to_pick(unit)
+                        if p.try_to_pick(unit):
+                            level[unit.x][unit.y] = '.'
             camera.update(player)
             for sprite in all_sprites:
                 camera.apply(sprite)
@@ -479,6 +551,40 @@ def main_game(seed=SEED):
                              pygame.K_DOWN] and motion == M_MOVING:
                     motion = M_STOP
         draw_menu(player)
+        if not player.alive:
+            score += sum([(i - 10) * 100 for i in player.attr])
+            return score
+        pygame.display.flip()
+        clock.tick(FPS)
+
+
+def end_game(score):
+    intro_text = ["GAME END", "",
+                  f"Счет: {score}",
+                  "Нажми на экран, чтобы начать новую игру"]
+    pygame.init()
+    font = pygame.font.Font(None, 50)
+    text_coord = 50
+    surf = pygame.Surface((WIDTH, HEIGHT))
+    surf.fill((0, 0, 0))
+    surf.set_alpha(220)
+    screen.blit(surf, (0, 0))
+    for line in intro_text:
+        string_rendered = font.render(line, 1, pygame.Color('white'))
+        intro_rect = string_rendered.get_rect()
+        text_coord += 10
+        intro_rect.top = text_coord
+        intro_rect.x = 10
+        text_coord += intro_rect.height
+        screen.blit(string_rendered, intro_rect)
+    gameplay = False
+    while not gameplay:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                terminate()
+            elif event.type == pygame.KEYDOWN or \
+                    event.type == pygame.MOUSEBUTTONDOWN:
+                gameplay = True
         pygame.display.flip()
         clock.tick(FPS)
 
@@ -487,4 +593,5 @@ def main_game(seed=SEED):
 # show_map_pic()
 
 start_screen()
-main_game(int(new_game()))
+while True:
+    end_game(main_game(int(new_game())))
