@@ -1,5 +1,5 @@
 # This is main file of project
-# Last commit: GUI improved and hardness
+# Last commit: ADDED A WIN CONDITION
 # MAIN TODO: make a battle mode and AI generation
 import random
 import logging
@@ -658,7 +658,7 @@ def main_game(seed=SEED):
         pygame.display.flip()
         if not player.alive:
             score += sum([(i - 10) * 100 for i in player.attr])
-            return score
+            return score, "смерть"
         for u in check_nearest(player):
             menu_battle(player, u)
             tiles_group.draw(screen)
@@ -668,17 +668,19 @@ def main_game(seed=SEED):
             pygame.display.flip()
             if not player.alive:
                 score += sum([(i - 10) * 100 for i in player.attr])
-                return score
+                return score, "смерть"
         for u1 in all_units:
             if u1 == player:
                 continue
             for u2 in check_nearest(u1):
                 battle(u1, u2)
+        if len(units_group) == 1:
+            return score, "победа!!!"
         clock.tick(FPS)
 
 
-def end_game(score):
-    intro_text = ["GAME END", "",
+def end_game(score, res):
+    intro_text = ["GAME END", "", f"Результат: {res}",
                   f"Счет: {score}",
                   "Нажми на экран, чтобы начать новую игру"]
     font = pygame.font.Font(None, 50)
@@ -711,4 +713,4 @@ def end_game(score):
 
 start_screen()
 while True:
-    end_game(main_game(int(new_game())))
+    end_game(*main_game(int(new_game())))
