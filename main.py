@@ -125,6 +125,35 @@ player_group = pygame.sprite.Group()
 
 # TODO: REFACTOR THE CLASSES
 
+class ButtonBox(pygame.sprite.Sprite):
+    def __init__(self, x, y, font: pygame.font.Font, color, text):
+        super().__init__()
+        self.color = color
+        self.backcolor = None
+        self.pos = (x, y)
+        self.font = font
+        self.text = text
+        self.active = False
+        self.render_text()
+
+    def render_text(self):
+        self.font.set_bold(self.active)
+        t_surf = self.font.render(self.text, True, self.color, self.backcolor)
+        self.image = pygame.Surface((t_surf.get_width() + 10, t_surf.get_height() + 10),
+                                    pygame.SRCALPHA)
+        if self.backcolor:
+            self.image.fill(self.backcolor)
+        self.image.blit(t_surf, (5, 5))
+        pygame.draw.rect(self.image, self.color, self.image.get_rect().inflate(-2, -2), 2 * (2 if self.active else 1))
+        self.rect = self.image.get_rect(topleft=self.pos)
+
+    def update(self, event_list):
+        for event in event_list:
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                self.active = self.rect.collidepoint(event.pos)
+        self.render_text()
+
+
 class TextInputBox(pygame.sprite.Sprite):
     def __init__(self, x, y, w, font: pygame.font.Font, color):
         super().__init__()
@@ -145,7 +174,7 @@ class TextInputBox(pygame.sprite.Sprite):
         if self.backcolor:
             self.image.fill(self.backcolor)
         self.image.blit(t_surf, (5, 5))
-        pygame.draw.rect(self.image, self.color, self.image.get_rect().inflate(-2, -2), 2*(2 if self.active else 1))
+        pygame.draw.rect(self.image, self.color, self.image.get_rect().inflate(-2, -2), 2 * (2 if self.active else 1))
         self.rect = self.image.get_rect(topleft=self.pos)
 
     def update(self, event_list):
@@ -312,7 +341,7 @@ class Food(Pickable):
         self.type = type
 
     def pick(self, u: Unit):
-        u.eat += 11 + self.type * 40 - (BASE_LEVEL//3)*5
+        u.eat += 11 + self.type * 40 - (BASE_LEVEL // 3) * 5
         self.die()
 
 
@@ -344,7 +373,7 @@ def generate_level(seed=SEED):
             if -1 <= level[y][x] < 1:
                 Tile('sand', x, y)
                 lvl[x][y] = 's'
-                if level[y][x] == 0 and random.randint(1, 30 - (BASE_LEVEL - 1)*5) == 1:
+                if level[y][x] == 0 and random.randint(1, 30 - (BASE_LEVEL - 1) * 5) == 1:
                     enemies.append(Enemy(x, y, matrix=max_matrix))
             elif -1 > level[y][x]:
                 Tile('rock', x, y)
